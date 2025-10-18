@@ -224,6 +224,7 @@ app.post('/message', async (req, res) => {
     messageId: message.id,
     pod: POD_NAME 
   });
+  log.info(`Message sent to ${targetReplica}: ${content}`);
 });
 
 // Receive message from other replicas

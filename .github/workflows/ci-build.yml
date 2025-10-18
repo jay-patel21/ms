@@ -1,4 +1,4 @@
-name: Build and Push Images
+name: Build Images and Update Manifests
 
 on:
   push:
@@ -14,30 +14,23 @@ env:
   SERVICE_B_TAG: service-b-${{ github.sha }}
 
 jobs:
-  build-and-push:
+  build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ✅ Step 1: Authenticate to Google Cloud (NEW)
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      # ✅ Step 2: Set up gcloud CLI
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
 
-      # ✅ Step 3: Configure Docker to authenticate with Artifact Registry
       - name: Configure Artifact Registry auth
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
-      # ✅ Step 4: Build and Push Images
       - name: Build base image
         run: docker build -t node-kube-app:latest .
 
@@ -50,3 +43,40 @@ jobs:
         run: |
           docker tag node-kube-app:latest "${IMAGE_BASE}:${SERVICE_B_TAG}"
           docker push "${IMAGE_BASE}:${SERVICE_B_TAG}"
+
+      - name: Update manifest image tags
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          python - <<'PY'
+import yaml
+from pathlib import Path
+import os
+
+image_base = os.environ['IMAGE_BASE']
+service_a_tag = os.environ['SERVICE_A_TAG']
+service_b_tag = os.environ['SERVICE_B_TAG']
+
+files = [
+    (Path('k8s/prod/service-a/deployment.yaml'), f"{image_base}:{service_a_tag}"),
+    (Path('k8s/prod/service-b/deployment.yaml'), f"{image_base}:{service_b_tag}"),
+]
+
+for path, image in files:
+    data = yaml.safe_load(path.read_text())
+    containers = data['spec']['template']['spec']['containers']
+    containers[0]['image'] = image
+    path.write_text(yaml.safe_dump(data, sort_keys=False))
+PY
+
+      - name: Commit manifest changes
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if git diff --quiet k8s/prod; then
+            echo "No manifest changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add k8s/prod/service-a/deployment.yaml k8s/prod/service-b/deployment.yaml
+          git commit -m "chore: update image tags ${GITHUB_SHA} [skip ci]"
+          git push
