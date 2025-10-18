@@ -44,6 +44,10 @@ jobs:
           docker tag node-kube-app:latest "${IMAGE_BASE}:${SERVICE_B_TAG}"
           docker push "${IMAGE_BASE}:${SERVICE_B_TAG}"
 
+      - name: Install PyYAML
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: pip install pyyaml
+
       - name: Update manifest image tags
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
