@@ -17,43 +17,55 @@ env:
   SERVICE_B_TAG: service-b-${{ github.sha }}
 
 jobs:
-  build:
+  build-and-push:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout repo
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: true
 
+      # 2️⃣ Authenticate to Google Cloud
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # 3️⃣ Set up gcloud CLI
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          export_default_credentials: true
 
+      # 4️⃣ Configure Docker to push to Artifact Registry
       - name: Configure Artifact Registry auth
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
+      # 5️⃣ Build base image
       - name: Build base image
         run: docker build -t node-kube-app:latest .
 
+      # 6️⃣ Push service A image
       - name: Push service A image
         run: |
           docker tag node-kube-app:latest "${IMAGE_BASE}:${SERVICE_A_TAG}"
           docker push "${IMAGE_BASE}:${SERVICE_A_TAG}"
 
+      # 7️⃣ Push service B image
       - name: Push service B image
         run: |
           docker tag node-kube-app:latest "${IMAGE_BASE}:${SERVICE_B_TAG}"
           docker push "${IMAGE_BASE}:${SERVICE_B_TAG}"
 
+      # 8️⃣ Install PyYAML (needed for manifest update)
       - name: Install PyYAML
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: pip install pyyaml
 
+      # 9️⃣ Update manifest image tags
       - name: Update manifest image tags
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
@@ -72,12 +84,14 @@ jobs:
           ]
 
           for path, image in files:
+              print(f"Updating {path} to {image}")
               data = yaml.safe_load(path.read_text())
               containers = data['spec']['template']['spec']['containers']
               containers[0]['image'] = image
               path.write_text(yaml.safe_dump(data, sort_keys=False))
           PY
 
+      # 🔟 Commit and push manifest changes
       - name: Commit manifest changes
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
