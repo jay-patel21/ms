@@ -6,6 +6,9 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: write
+
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT }}
   REGION: ${{ secrets.GCP_REGION }}
@@ -20,6 +23,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
@@ -52,25 +58,25 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           python - <<'PY'
-import yaml
-from pathlib import Path
-import os
+          import yaml
+          from pathlib import Path
+          import os
 
-image_base = os.environ['IMAGE_BASE']
-service_a_tag = os.environ['SERVICE_A_TAG']
-service_b_tag = os.environ['SERVICE_B_TAG']
+          image_base = os.environ['IMAGE_BASE']
+          service_a_tag = os.environ['SERVICE_A_TAG']
+          service_b_tag = os.environ['SERVICE_B_TAG']
 
-files = [
-    (Path('k8s/prod/service-a/deployment.yaml'), f"{image_base}:{service_a_tag}"),
-    (Path('k8s/prod/service-b/deployment.yaml'), f"{image_base}:{service_b_tag}"),
-]
+          files = [
+              (Path('k8s/prod/service-a/deployment.yaml'), f"{image_base}:{service_a_tag}"),
+              (Path('k8s/prod/service-b/deployment.yaml'), f"{image_base}:{service_b_tag}"),
+          ]
 
-for path, image in files:
-    data = yaml.safe_load(path.read_text())
-    containers = data['spec']['template']['spec']['containers']
-    containers[0]['image'] = image
-    path.write_text(yaml.safe_dump(data, sort_keys=False))
-PY
+          for path, image in files:
+              data = yaml.safe_load(path.read_text())
+              containers = data['spec']['template']['spec']['containers']
+              containers[0]['image'] = image
+              path.write_text(yaml.safe_dump(data, sort_keys=False))
+          PY
 
       - name: Commit manifest changes
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
