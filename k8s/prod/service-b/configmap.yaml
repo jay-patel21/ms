@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-b-config
+  namespace: node-kube-prod
+data:
+  APP_NAME: "service-b"
+  LOG_LEVEL: "info"
+  MESSAGE_RETENTION: "500"
+  BROADCAST_TIMEOUT: "5000"
+  DISCOVERY_INTERVAL_MS: "10000"
+  REPLICA_TTL_MS: "60000"
+  SERVICE_DNS_SUFFIX: "svc.cluster.local"
+  SERVICE_ROLE: "notification"
+

@@ -1,0 +1,46 @@
+name: Build and Push Images
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT }}
+  REGION: ${{ secrets.GCP_REGION }}
+  IMAGE_BASE: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/node-kube-repo/node-kube-app
+  SERVICE_A_TAG: service-a-${{ github.sha }}
+  SERVICE_B_TAG: service-b-${{ github.sha }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
+
+      - name: Configure Artifact Registry auth
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build base image
+        run: docker build -t node-kube-app:latest .
+
+      - name: Push service A image
+        run: |
+          docker tag node-kube-app:latest "${IMAGE_BASE}:${SERVICE_A_TAG}"
+          docker push "${IMAGE_BASE}:${SERVICE_A_TAG}"
+
+      - name: Push service B image
+        run: |
+          docker tag node-kube-app:latest "${IMAGE_BASE}:${SERVICE_B_TAG}"
+          docker push "${IMAGE_BASE}:${SERVICE_B_TAG}"
+

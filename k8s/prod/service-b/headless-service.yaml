@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-b-internal
+  namespace: node-kube-prod
+  labels:
+    app: service-b
+spec:
+  clusterIP: None
+  selector:
+    app: service-b
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+
